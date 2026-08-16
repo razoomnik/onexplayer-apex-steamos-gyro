@@ -5,8 +5,20 @@ D=/sys/bus/iio/devices/iio:device0
 PID="$(systemctl show -p MainPID --value inputplumber.service)"
 
 echo "===== SERVICES ====="
+echo "volume fix:      $(systemctl is-active apex-volume-buttons.service 2>/dev/null || true)"
 echo "trigger service: $(systemctl is-active apex-bmi260-trigger.service 2>/dev/null || true)"
 echo "inputplumber:     $(systemctl is-active inputplumber.service 2>/dev/null || true)"
+
+echo
+echo "===== VOLUME BUTTONS ====="
+if [ -e /run/apex-volume-buttons.ready ]; then
+    echo "Ready: yes"
+    echo "Source: $(cat /run/apex-volume-buttons.ready 2>/dev/null)"
+else
+    echo "Ready: no"
+fi
+
+grep -B4 -A8 "ONEXPLAYER APEX Volume Buttons" /proc/bus/input/devices 2>/dev/null || true
 
 echo
 echo "===== INPUTPLUMBER ====="
@@ -30,6 +42,10 @@ if [ -d "$D" ]; then
 else
     echo "ERROR: $D not found"
 fi
+
+echo
+echo "===== RECENT VOLUME LOG ====="
+sudo journalctl -u apex-volume-buttons.service -b --no-pager 2>/dev/null | tail -20
 
 echo
 echo "===== RECENT IMU LOG ====="
