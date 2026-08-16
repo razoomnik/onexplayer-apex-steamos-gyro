@@ -35,6 +35,22 @@ echo "===== IMU ====="
 if [ -d "$D" ]; then
     echo "Name:      $(cat "$D/name" 2>/dev/null)"
     echo "Trigger:   $(cat "$D/trigger/current_trigger" 2>/dev/null)"
+
+    TRIG=""
+    for t in /sys/bus/iio/devices/trigger*; do
+        [ -d "$t" ] || continue
+        if [ "$(cat "$t/name" 2>/dev/null)" = "bmi260-hrtimer" ]; then
+            TRIG="$t"
+            break
+        fi
+    done
+
+    if [ -n "$TRIG" ]; then
+        echo "Trigger Hz: $(cat "$TRIG/sampling_frequency" 2>/dev/null)"
+    else
+        echo "Trigger Hz: unavailable"
+    fi
+
     echo "Buffer:    $(cat "$D/buffer/enable" 2>/dev/null)"
     echo "Watermark: $(cat "$D/buffer/watermark" 2>/dev/null)"
     echo "Gyro Hz:   $(cat "$D/in_anglvel_sampling_frequency" 2>/dev/null)"
