@@ -1,0 +1,13 @@
+[Unit]
+Description=ONEXPLAYER APEX Volume Button Fix
+Before=inputplumber.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /etc/inputplumber/apex-volume-buttons.py
+ExecStartPost=/bin/sh -c 'i=0; while [ "$i" -lt 100 ]; do [ -e /run/apex-volume-buttons.ready ] && exit 0; i=$((i+1)); sleep 0.1; done; exit 1'
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target
