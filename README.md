@@ -1,8 +1,16 @@
-# ONEXPLAYER APEX SteamOS Gyroscope Fix
+# ONEXPLAYER APEX SteamOS Fixes
 
-Working gyroscope support for the **ONEXPLAYER APEX** on SteamOS using the onboard Bosch BMI260 IMU.
+Working SteamOS fixes for the **ONEXPLAYER APEX**.
 
-This project documents and packages the configuration that was tested on:
+Currently included:
+
+- gyroscope support using the onboard Bosch BMI260 IMU;
+- corrected APEX IMU mount matrix;
+- buffered 200 Hz IIO sampling through a patched InputPlumber PR #612 build;
+- persistent physical volume button support;
+- corrected physical volume layout: **left = volume down**, **right = volume up**.
+
+Tested on:
 
 - ONE-NETBOOK / ONEXPLAYER APEX
 - SteamOS 3.8.25 (build 20260807.2)
@@ -11,7 +19,7 @@ This project documents and packages the configuration that was tested on:
 - BMI260 exposed through ACPI as `BMI0160`
 - kernel driver `bmi270_i2c`
 
-## What was wrong
+## Gyroscope fix
 
 The stock SteamOS kernel can already detect the IMU correctly as `bmi260`, but the stock ONEXPLAYER APEX InputPlumber profile uses an Xbox Elite virtual target, which does not expose gyro to Steam.
 
@@ -27,7 +35,7 @@ A draft InputPlumber buffered-IIO implementation (PR #612) solves the sampling m
 
 The APEX also has no hardware IIO trigger/IRQ exposed to Linux, so this setup creates a **200 Hz hrtimer IIO trigger** at boot.
 
-## Working data path
+### Working gyro data path
 
 ```text
 BMI260
@@ -40,6 +48,39 @@ BMI260
   -> Steam Input
 ```
 
+## Volume button fix
+
+The physical APEX volume buttons are exposed through:
+
+```text
+AT Translated Set 2 keyboard
+VID 0001 / PID 0001
+```
+
+Measured physical events:
+
+```text
+left button  -> scan 0xb0 -> KEY_VOLUMEUP
+right button -> scan 0xae -> KEY_VOLUMEDOWN
+```
+
+The APEX InputPlumber profile also grabs this keyboard. During startup InputPlumber briefly creates a virtual keyboard target, but SteamOS later switches the composite target to `deck-uhid` only. The physical keyboard remains grabbed, so its volume events disappear.
+
+The fix runs a very small Python/uinput forwarder **before InputPlumber**. It exclusively owns the AT keyboard and exposes a dedicated virtual device named:
+
+```text
+ONEXPLAYER APEX Volume Buttons
+```
+
+It also swaps the two physical buttons to the desired layout:
+
+```text
+physical LEFT  -> KEY_VOLUMEDOWN
+physical RIGHT -> KEY_VOLUMEUP
+```
+
+This was tested together with the gyro fix: both gyro and volume buttons remain operational at the same time.
+
 ## Installation
 
 The easiest method is:
@@ -48,7 +89,7 @@ The easiest method is:
 ./install.sh
 ```
 
-`install.sh` expects the tested binary at:
+`install.sh` expects the tested InputPlumber binary at:
 
 ```text
 bin/inputplumber-pr612-apex-v2
@@ -71,7 +112,10 @@ After installation, reboot and verify:
 Expected core state:
 
 ```text
-InputPlumber binary: .../inputplumber-pr612-apex-v2
+volume fix:      active
+trigger service: active
+inputplumber:     active
+Ready: yes
 Trigger:   bmi260-hrtimer
 Buffer:    1
 Gyro Hz:   200.000000
@@ -97,13 +141,16 @@ mount_matrix:
 
 - `config/50-onexplayer_apex.yaml` — InputPlumber APEX profile with `deck-uhid` and the corrected IMU mount matrix.
 - `scripts/apex-bmi260-trigger.sh` — creates the software IIO hrtimer trigger at boot.
-- `systemd/apex-bmi260-trigger.service` — boot service for the trigger.
+- `scripts/apex-volume-buttons.py` — physical volume-button forwarder/remapper.
+- `systemd/apex-bmi260-trigger.service` — boot service for the IMU trigger.
+- `systemd/apex-volume-buttons.service` — persistent volume-button service.
+- `systemd/05-apex-volume-buttons.conf` — makes InputPlumber wait until the volume forwarder owns the AT keyboard.
 - `systemd/10-apex-bmi260-trigger.conf` — makes InputPlumber depend on the trigger service.
 - `systemd/20-pr612-buffered-imu.conf` — runs the patched InputPlumber binary.
 - `build.sh` — reproducibly builds PR #612 with the APEX/BMI260 fixes in a container.
-- `install.sh` — installs the complete fix.
-- `verify.sh` — verifies the active binary and IIO state.
-- `uninstall.sh` — returns InputPlumber to the SteamOS stock binary/config path.
+- `install.sh` — installs the complete APEX fix set.
+- `verify.sh` — verifies volume, InputPlumber and IIO state.
+- `uninstall.sh` — removes the custom services and returns InputPlumber to the SteamOS stock binary/config path.
 
 ## Upstream
 
