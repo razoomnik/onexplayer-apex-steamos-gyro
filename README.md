@@ -6,7 +6,8 @@ Currently included:
 
 - gyroscope support using the onboard Bosch BMI260 IMU;
 - corrected APEX IMU mount matrix;
-- buffered 200 Hz IIO sampling through a patched InputPlumber PR #612 build;
+- BMI260 running at 200 Hz with buffered IIO capture through a **100 Hz software hrtimer trigger**;
+- patched InputPlumber PR #612 build;
 - persistent physical volume button support;
 - corrected physical volume layout: **left = volume down**, **right = volume up**.
 
@@ -33,14 +34,22 @@ A draft InputPlumber buffered-IIO implementation (PR #612) solves the sampling m
 - Do not perform a direct `raw` IIO read after buffered mode has claimed the device (`EBUSY`).
 - Read BMI260 buffered samples as signed **16-bit** values (`i16`), matching the kernel IIO storage format, instead of `i32`.
 
-The APEX also has no hardware IIO trigger/IRQ exposed to Linux, so this setup creates a **200 Hz hrtimer IIO trigger** at boot.
+The APEX has no hardware IIO trigger/IRQ exposed to Linux, so this setup creates a software hrtimer trigger at boot.
+
+### Important trigger-rate finding
+
+The BMI260 itself remains configured at **200 Hz**, but the software hrtimer trigger must run at **100 Hz**.
+
+Testing a 200 Hz hrtimer against the BMI260's 200 Hz sensor ODR caused severe horizontal direction-reversal kicks: when changing direction sharply, the cursor first jumped in the previous/wrong direction. Lowering only the hrtimer trigger to 100 Hz eliminated the kicks while keeping the sensor ODR at 200 Hz.
+
+The likely reason is that the independent software hrtimer is not phase-synchronized with the BMI260's internal 200 Hz sample timing. Running both at the same nominal rate can therefore sample stale/repeated sensor frames around rapid reversals. Sampling the 200 Hz sensor with a 100 Hz software trigger leaves enough margin for a fresh frame between reads.
 
 ### Working gyro data path
 
 ```text
-BMI260
+BMI260 sensor ODR @ 200 Hz
   -> bmi270_i2c
-  -> bmi260-hrtimer @ 200 Hz
+  -> bmi260-hrtimer @ 100 Hz
   -> Linux IIO triggered buffer
   -> patched InputPlumber PR #612
   -> corrected APEX mount matrix
@@ -116,10 +125,11 @@ volume fix:      active
 trigger service: active
 inputplumber:     active
 Ready: yes
-Trigger:   bmi260-hrtimer
-Buffer:    1
-Gyro Hz:   200.000000
-Accel Hz:  200.000000
+Trigger:    bmi260-hrtimer
+Trigger Hz: 100.000000
+Buffer:     1
+Gyro Hz:    200.000000
+Accel Hz:   200.000000
 ```
 
 ## Steam gyro setting
@@ -140,7 +150,7 @@ mount_matrix:
 ## Files
 
 - `config/50-onexplayer_apex.yaml` — InputPlumber APEX profile with `deck-uhid` and the corrected IMU mount matrix.
-- `scripts/apex-bmi260-trigger.sh` — creates the software IIO hrtimer trigger at boot.
+- `scripts/apex-bmi260-trigger.sh` — creates the software IIO hrtimer trigger at boot and sets it to 100 Hz.
 - `scripts/apex-volume-buttons.py` — physical volume-button forwarder/remapper.
 - `systemd/apex-bmi260-trigger.service` — boot service for the IMU trigger.
 - `systemd/apex-volume-buttons.service` — persistent volume-button service.
@@ -149,7 +159,7 @@ mount_matrix:
 - `systemd/20-pr612-buffered-imu.conf` — runs the patched InputPlumber binary.
 - `build.sh` — reproducibly builds PR #612 with the APEX/BMI260 fixes in a container.
 - `install.sh` — installs the complete APEX fix set.
-- `verify.sh` — verifies volume, InputPlumber and IIO state.
+- `verify.sh` — verifies volume, InputPlumber and IIO state, including the software-trigger frequency.
 - `uninstall.sh` — removes the custom services and returns InputPlumber to the SteamOS stock binary/config path.
 
 ## Upstream
