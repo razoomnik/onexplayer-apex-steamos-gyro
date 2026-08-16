@@ -4,6 +4,12 @@ set -euo pipefail
 D=/sys/bus/iio/devices/iio:device0
 
 sudo systemctl stop inputplumber.service || true
+sudo systemctl disable --now apex-volume-buttons.service || true
+sudo rm -f /etc/systemd/system/apex-volume-buttons.service
+sudo rm -f /etc/systemd/system/inputplumber.service.d/05-apex-volume-buttons.conf
+sudo rm -f /etc/inputplumber/apex-volume-buttons.py
+sudo rm -f /run/apex-volume-buttons.ready
+
 sudo rm -f /etc/systemd/system/inputplumber.service.d/20-pr612-buffered-imu.conf
 sudo rm -f /etc/systemd/system/inputplumber.service.d/10-apex-bmi260-trigger.conf
 sudo systemctl disable --now apex-bmi260-trigger.service || true
@@ -19,5 +25,5 @@ sudo rmdir /sys/kernel/config/iio/triggers/hrtimer/bmi260-hrtimer 2>/dev/null ||
 sudo systemctl daemon-reload
 sudo systemctl start inputplumber.service
 
-echo "Restored stock InputPlumber service."
+echo "Restored stock InputPlumber service and removed the Apex volume forwarder."
 inputplumber --version || true
