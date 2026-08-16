@@ -18,7 +18,11 @@ for t in /sys/bus/iio/devices/trigger*; do
     [ -d "$t" ] || continue
 
     if [ "$(cat "$t/name" 2>/dev/null)" = "$TRIGNAME" ]; then
-        echo 200 > "$t/sampling_frequency"
+        # Keep the BMI260 itself at 200 Hz, but sample it with the software
+        # trigger at 100 Hz. Running both at 200 Hz caused direction-reversal
+        # kicks on the APEX because the hrtimer is not synchronized with the
+        # sensor's internal ODR/data-ready timing.
+        echo 100 > "$t/sampling_frequency"
         exit 0
     fi
 done
