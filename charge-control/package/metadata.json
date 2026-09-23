@@ -1,0 +1,15 @@
+{
+  "KPlugin": {
+    "Id": "local.onexfly.charge-toggle",
+    "Name": "Onexfly: зарядка",
+    "Description": "Переключение зарядки аккумулятора Onexfly Apex",
+    "Icon": "object-locked",
+    "Category": "Hardware Control",
+    "Version": "1.1.0",
+    "EnabledByDefault": true
+  },
+  "KPackageStructure": "Plasma/Applet",
+  "X-Plasma-API-Minimum-Version": "6.0",
+  "X-Plasma-NotificationArea": "true",
+  "X-Plasma-NotificationAreaCategory": "Hardware"
+}

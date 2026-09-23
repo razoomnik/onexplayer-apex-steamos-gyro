@@ -37,6 +37,41 @@ cd volume-buttons
 ./install.sh
 ```
 
+### Battery charge blocking
+
+Directory: [`charge-control/`](charge-control/)
+
+Fixes the Apex-specific EC register mismatch that lets the generic `oxpec`
+interface report a charge block while the battery continues charging. Includes
+an optional Plasma tray switch and a passwordless, restricted helper.
+
+```bash
+cd charge-control
+./install.sh
+```
+
+Verified on BIOS 0.14 / EC 0.12 and SteamOS kernel
+`7.2.4-valve1-1-neptune-72-g5ab4af5e2eb9`: blocking produces `Not charging`,
+zero charging power and stable stored energy. This controls manual blocking;
+it does not correct the generic KDE percentage-limit setting.
+
+### Decky: Apex Fixes
+
+Directory: [`decky/`](decky/)
+
+Adds **Battery → Block charging** to the Apex Fixes plugin alongside joystick
+LED control and Wi-Fi recovery. The toggle reflects the actual hardware mode
+and works together with the Plasma switch without password prompts.
+
+```bash
+cd decky
+./install.sh
+```
+
+Decky bundles its own copy of the charge helper. It can be installed or removed
+independently of all standalone fixes. `python3 decky/build.py` also creates an
+installable `decky/ApexFixes.zip`.
+
 ## Tested device
 
 - ONE-NETBOOK / ONEXPLAYER APEX
