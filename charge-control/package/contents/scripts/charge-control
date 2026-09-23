@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}" in
+    status|allow|block)
+        # Read and write the same Apex-specific registers through the restricted helper.
+        exec timeout 20s pkexec --disable-internal-agent /home/.onexfly-charge-helper/charge-helper "$1"
+        ;;
+    *) printf 'Usage: %s status|allow|block\n' "$0" >&2; exit 2 ;;
+esac

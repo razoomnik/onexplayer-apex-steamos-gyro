@@ -1,0 +1,8 @@
+{
+  "name": "decky-apex-fixes",
+  "version": "0.3.0",
+  "description": "Decky controls and recovery fixes for ONEXPLAYER APEX on SteamOS",
+  "type": "module",
+  "scripts": {"build": "python3 build.py"},
+  "license": "BSD-3-Clause"
+}

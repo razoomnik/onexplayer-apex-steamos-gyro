@@ -1,0 +1,84 @@
+#!/usr/bin/python3 -I
+"""Apex-only charge control using the registers selected by OneXConsole 0.9.4-fix5.
+
+EC SRAM 0x4E5/0x4E6 correspond to ACPI EC offsets 0xE5/0xE6.
+Do not use oxpec's generic 0xA3/0xA4 charge interface on this model.
+Only the bypass byte is writable here, with the vendor's fixed 0/3 values.
+"""
+import fcntl
+import os
+import signal
+from pathlib import Path
+import subprocess
+import sys
+
+IO = Path('/sys/kernel/debug/ec/ec0/io')
+WRITE_SUPPORT = Path('/sys/module/ec_sys/parameters/write_support')
+MODES = {0: 'auto', 1: 'inhibit-charge-awake', 3: 'inhibit-charge'}
+
+
+def read_byte(ec, offset):
+    ec.seek(offset)
+    value = ec.read(1)
+    if len(value) != 1:
+        raise RuntimeError('Неполное чтение контроллера зарядки')
+    return value[0]
+
+
+def main():
+    if len(sys.argv) != 2 or sys.argv[1] not in ('status', 'allow', 'block'):
+        raise RuntimeError('Допустимые команды: status, allow, block')
+    if os.geteuid() != 0:
+        raise RuntimeError('Запустите помощник через pkexec')
+    if Path('/sys/class/dmi/id/board_name').read_text().strip() != 'ONEXPLAYER APEX':
+        raise RuntimeError('Помощник поддерживает только ONEXPLAYER APEX')
+    batteries = [p for p in Path('/sys/class/power_supply').glob('BAT*')
+                 if (p / 'capacity').is_file()]
+    if len(batteries) != 1:
+        raise RuntimeError('Батарея не найдена: состояние запрета неизвестно')
+    battery = batteries[0]
+    lockdir = Path('/run/onexfly-charge-toggle')
+    lockdir.mkdir(mode=0o700, exist_ok=True)
+    with (lockdir / 'lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if not IO.exists():
+            subprocess.run(['/usr/bin/modprobe', 'ec_sys'], check=True, timeout=10)
+        with IO.open('rb', buffering=0) as ec:
+            mode = read_byte(ec, 0xE6)
+            limit = read_byte(ec, 0xE5)
+        if mode not in MODES or not 0 <= limit <= 100:
+            raise RuntimeError(f'Неизвестное состояние EC: режим={mode}, лимит={limit}; запись отменена')
+        if sys.argv[1] != 'status':
+            desired = 0 if sys.argv[1] == 'allow' else 3
+            previous_write_support = WRITE_SUPPORT.read_text().strip()
+            try:
+                if previous_write_support != 'Y':
+                    WRITE_SUPPORT.write_text('Y\n')
+                with IO.open('r+b', buffering=0) as ec:
+                    ec.seek(0xE6)
+                    if ec.write(bytes([desired])) != 1:
+                        raise RuntimeError('Не удалось записать запрет зарядки')
+                    mode = read_byte(ec, 0xE6)
+                if mode != desired:
+                    raise RuntimeError('Контроллер не подтвердил переключение зарядки')
+            finally:
+                if previous_write_support != 'Y':
+                    WRITE_SUPPORT.write_text(previous_write_support + '\n')
+            print(MODES[mode])
+        else:
+            capacity = (battery / 'capacity').read_text().strip()
+            status = (battery / 'status').read_text().strip()
+            print(f'{MODES[mode]}|{capacity}|{limit}|{status}')
+
+
+def cancelled(_signum, _frame):
+    raise RuntimeError('Операция зарядки отменена')
+
+
+if __name__ == '__main__':
+    signal.signal(signal.SIGTERM, cancelled)
+    try:
+        main()
+    except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+        print(str(error), file=sys.stderr)
+        sys.exit(1)
